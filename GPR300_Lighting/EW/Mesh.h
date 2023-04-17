@@ -31,6 +31,8 @@ namespace ew {
 		Mesh(MeshData* meshData);
 		~Mesh();
 		void draw();
+		GLuint getVAO() { return mVAO; }
+		GLsizei getNumIndicies() { return mNumIndices; }
 	private:
 		GLuint mVAO, mVBO, mEBO;
 		GLsizei mNumIndices;

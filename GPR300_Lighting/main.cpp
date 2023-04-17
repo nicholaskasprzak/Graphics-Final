@@ -212,12 +212,10 @@ public:
 		// Check for completeness
 		if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
 		{
-			printf("Frame buffer is incomplete.\n");
 		}
 
 		else
 		{
-			printf("Successfully created frame buffer.\n");
 		}
 
 		// Unbind framebuffer
@@ -234,7 +232,6 @@ public:
 
 		delete[] textures;
 		textures = nullptr;
-		printf("Unloaded buffer.\n");
 	}
 
 	// Getter for the current frame buffer
@@ -278,12 +275,10 @@ public:
 
 		if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
 		{
-			printf("Frame buffer is incomplete.\n");
 		}
 
 		else
 		{
-			printf("Successfully created frame buffer.\n");
 		}
 
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -302,6 +297,75 @@ private:
 	unsigned int depthTexture;
 
 	int mWidth, mHeight;
+};
+
+/*
+* My goal with this class is to allow for direct usage of
+* the existing Mesh class without having to mess with any
+* of its internal functions while also allowing for it to
+* be used for instanced rendering.
+* 
+* Ideally this can be done with a seperate VBO for instance
+* related vertex attribute loading, allowing for it to then
+* be bound to the mesh's VAO before the instanced draw call.
+* 
+* This should also allow for direct modification of and access
+* to instance data, potentially allowing for its modification
+* at runtime.
+*/
+class InstancedMesh
+{
+public:
+	InstancedMesh(ew::Transform transform, ew::MeshData data, int count)
+	{
+		meshTransform = transform;
+		meshData = data;
+		mesh = new ew::Mesh(&meshData); // The VAO from this never gets unbound so I'm hoping this works.
+		glBindVertexArray(mesh->getVAO());
+
+		instanceCount = count;
+		
+		// temp
+		offsets = new glm::vec3[instanceCount];
+		for (int i = 0; i < instanceCount; i++)
+		{
+			offsets[i] = glm::vec3(0, i, 0);
+		}
+
+		glGenBuffers(1, &instancedVBO);
+		glBindBuffer(GL_ARRAY_BUFFER, instancedVBO);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * instanceCount, &offsets, GL_STATIC_DRAW);
+
+		glEnableVertexAttribArray(4);
+		glVertexAttribPointer(4, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+
+		glVertexAttribDivisor(4, 1);
+	}
+
+	~InstancedMesh()
+	{
+		delete[] offsets;
+		delete mesh;
+	}
+
+	void draw()
+	{
+		glBindVertexArray(mesh->getVAO());
+		glDrawElementsInstanced(GL_TRIANGLES, mesh->getNumIndicies(), GL_UNSIGNED_INT, 0, instanceCount);
+	}
+
+	glm::mat4 getModelMatrix() { return meshTransform.getModelMatrix(); }
+
+private:
+	ew::Transform meshTransform;
+	ew::MeshData meshData;
+	ew::Mesh* mesh;
+	
+	int instanceCount;
+	unsigned int instancedVBO;
+
+	// temp
+	glm::vec3* offsets;
 };
 
 // Models
@@ -331,6 +395,8 @@ ew::Mesh* cylinderMesh;
 ew::Mesh* quadMesh;
 ew::Mesh* depthQuadMesh;
 
+InstancedMesh* instanced;
+
 void drawScene(Shader& targetShader, glm::mat4 viewMatrix, glm::mat4 projectionMatrix)
 {
 	targetShader.setMat4("_View", viewMatrix);
@@ -355,6 +421,15 @@ void drawScene(Shader& targetShader, glm::mat4 viewMatrix, glm::mat4 projectionM
 	//Draw plane
 	targetShader.setMat4("_Model", planeTransform.getModelMatrix());
 	planeMesh->draw();
+}
+
+void drawSceneInstanced(Shader& targetShader, glm::mat4 viewMatrix, glm::mat4 projectionMatrix)
+{
+	targetShader.setMat4("_View", viewMatrix);
+	targetShader.setMat4("_Projection", projectionMatrix);
+
+	targetShader.setMat4("_Model", instanced->getModelMatrix());
+	instanced->draw();
 }
 
 int main() {
@@ -404,9 +479,6 @@ int main() {
 	// Create frame buffer instance with two frame buffers
 	FrameBuffer screenBuffer = FrameBuffer(1, SCREEN_WIDTH, SCREEN_HEIGHT);
 
-	// Create frame buffer to manage shadow depth buffer
-	ShadowBuffer depthBuffer = ShadowBuffer(2048, 2048);
-
 	ew::createCube(1.0f, 1.0f, 1.0f, cubeMeshData);
 	ew::createCube(1.0f, 2.0f, 1.0f, rectangleMeshData);
 	ew::createSphere(0.5f, 64, sphereMeshData);
@@ -422,6 +494,8 @@ int main() {
 	cylinderMesh = new ew::Mesh(&cylinderMeshData);
 	quadMesh = new ew::Mesh(&quadMeshData);
 	depthQuadMesh = new ew::Mesh(&depthQuadMeshData);
+
+	instanced = new InstancedMesh(cubeTransform, cubeMeshData, 1000);
 
 	//Enable back face culling
 	glEnable(GL_CULL_FACE);
@@ -496,20 +570,6 @@ int main() {
 		deltaTime = time - lastFrameTime;
 		lastFrameTime = time;
 
-		depthOnly.use();
-
-		glViewport(0, 0, 2048, 2048);
-		glBindFramebuffer(GL_FRAMEBUFFER, depthBuffer.getFBO());
-
-		glEnable(GL_DEPTH_TEST);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-		glm::mat4 lightView = glm::lookAt(_DirectionalLight.direction, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-		glm::mat4 lightProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, 1.0f, 200.0f);
-
-		glCullFace(GL_FRONT);
-		drawScene(depthOnly, lightView, lightProjection);
-
 		// Set active frame buffer to screenBuffer
 		glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 		glBindFramebuffer(GL_FRAMEBUFFER, screenBuffer.getFBO());
@@ -534,18 +594,13 @@ int main() {
 		litShader.setFloat("_Material.specularK", _Material.specularK);
 		litShader.setFloat("_Material.shininess", _Material.shininess);
 
-		litShader.setMat4("_LightViewProj", lightProjection * lightView);
 		litShader.setVec3("_CameraPosition", camera.getPosition());
 		
 		litShader.setFloat("_MinBias", minBias);
 		litShader.setFloat("_MaxBias", maxBias);
 
-		glActiveTexture(GL_TEXTURE3);
-		glBindTexture(GL_TEXTURE_2D, depthBuffer.getTexture());
-		litShader.setInt("_ShadowMap", 3);
-
 		glCullFace(GL_BACK);
-		drawScene(litShader, camera.getViewMatrix(), camera.getProjectionMatrix());
+		drawSceneInstanced(litShader, camera.getViewMatrix(), camera.getProjectionMatrix());
 
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
@@ -570,15 +625,6 @@ int main() {
 		postProc.setMat4("_Model", quadTransform.getModelMatrix());
 		quadMesh->draw();
 
-		if (showShadowMap)
-		{
-			glBindTexture(GL_TEXTURE_2D, depthBuffer.getTexture());
-			postProc.setInt("_Texture1", 4);
-
-			postProc.setMat4("_Model", depthQuadTransform.getModelMatrix());
-			depthQuadMesh->draw();
-		}
-
 		//Draw UI
 		ImGui::Begin("Directional Light");
 
@@ -590,13 +636,6 @@ int main() {
 		ImGui::Begin("Post Processing");
 
 		ImGui::Combo("Effects", &effectIndex, effectNames, IM_ARRAYSIZE(effectNames));
-		ImGui::End();
-
-		ImGui::Begin("Shadows");
-
-		ImGui::DragFloat("Min Bias", &minBias, 0.001f, 0.001f, 0.1f);
-		ImGui::DragFloat("Max Bias", &maxBias, 0.001f, 0.001f, 0.1f);
-		ImGui::Checkbox("Show Shadow Map", &showShadowMap);
 		ImGui::End();
 
 		ImGui::Render();
