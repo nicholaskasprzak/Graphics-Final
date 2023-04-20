@@ -320,10 +320,11 @@ public:
 	{
 		meshTransform = transform;
 		meshData = data;
-		mesh = new ew::Mesh(&meshData); // The VAO from this never gets unbound so I'm hoping this works.
+		mesh = new ew::Mesh(&meshData);
 		glBindVertexArray(mesh->getVAO());
 
 		instanceCount = count;
+		totalInstanceCount = count;
 		
 		// temp
 		offsets = new glm::vec3[instanceCount];
@@ -334,7 +335,7 @@ public:
 
 		glGenBuffers(1, &instancedVBO);
 		glBindBuffer(GL_ARRAY_BUFFER, instancedVBO);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * instanceCount, &offsets, GL_STATIC_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * totalInstanceCount, &offsets[0], GL_STATIC_DRAW);
 
 		glEnableVertexAttribArray(4);
 		glVertexAttribPointer(4, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
@@ -354,6 +355,16 @@ public:
 		glDrawElementsInstanced(GL_TRIANGLES, mesh->getNumIndicies(), GL_UNSIGNED_INT, 0, instanceCount);
 	}
 
+	void updateCount(int newCount)
+	{
+		if (newCount > totalInstanceCount)
+		{
+
+		}
+
+		instanceCount = newCount;
+	}
+
 	glm::mat4 getModelMatrix() { return meshTransform.getModelMatrix(); }
 
 private:
@@ -362,6 +373,7 @@ private:
 	ew::Mesh* mesh;
 	
 	int instanceCount;
+	int totalInstanceCount;
 	unsigned int instancedVBO;
 
 	// temp
@@ -495,7 +507,7 @@ int main() {
 	quadMesh = new ew::Mesh(&quadMeshData);
 	depthQuadMesh = new ew::Mesh(&depthQuadMeshData);
 
-	instanced = new InstancedMesh(cubeTransform, cubeMeshData, 1000);
+	instanced = new InstancedMesh(cubeTransform, cubeMeshData, 10000);
 
 	//Enable back face culling
 	glEnable(GL_CULL_FACE);
