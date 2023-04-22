@@ -316,26 +316,19 @@ private:
 class InstancedMesh
 {
 public:
-	InstancedMesh(ew::Transform transform, ew::MeshData data, int count)
+	InstancedMesh(ew::Transform transform, ew::MeshData data, int totalCount)
 	{
 		meshTransform = transform;
 		meshData = data;
 		mesh = new ew::Mesh(&meshData);
 		glBindVertexArray(mesh->getVAO());
 
-		instanceCount = count;
-		totalInstanceCount = count;
-		
-		// temp
-		offsets = new glm::vec3[instanceCount];
-		for (int i = 0; i < instanceCount; i++)
-		{
-			offsets[i] = glm::vec3(0, i, 0);
-		}
+		instanceCount = 0;
+		totalInstanceCount = totalCount;
 
 		glGenBuffers(1, &instancedVBO);
 		glBindBuffer(GL_ARRAY_BUFFER, instancedVBO);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * totalInstanceCount, &offsets[0], GL_STATIC_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * totalInstanceCount, nullptr, GL_DYNAMIC_DRAW);
 
 		glEnableVertexAttribArray(4);
 		glVertexAttribPointer(4, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
@@ -345,7 +338,6 @@ public:
 
 	~InstancedMesh()
 	{
-		delete[] offsets;
 		delete mesh;
 	}
 
@@ -355,14 +347,11 @@ public:
 		glDrawElementsInstanced(GL_TRIANGLES, mesh->getNumIndicies(), GL_UNSIGNED_INT, 0, instanceCount);
 	}
 
-	void updateCount(int newCount)
+	void updateData(glm::vec3* dataVec, int instances)
 	{
-		if (newCount > totalInstanceCount)
-		{
-
-		}
-
-		instanceCount = newCount;
+		glBindBuffer(GL_ARRAY_BUFFER, instancedVBO);
+		glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(glm::vec3) * instances, dataVec);
+		instanceCount = instances;
 	}
 
 	glm::mat4 getModelMatrix() { return meshTransform.getModelMatrix(); }
@@ -375,9 +364,6 @@ private:
 	int instanceCount;
 	int totalInstanceCount;
 	unsigned int instancedVBO;
-
-	// temp
-	glm::vec3* offsets;
 };
 
 // Models
@@ -507,7 +493,10 @@ int main() {
 	quadMesh = new ew::Mesh(&quadMeshData);
 	depthQuadMesh = new ew::Mesh(&depthQuadMeshData);
 
-	instanced = new InstancedMesh(cubeTransform, cubeMeshData, 10000);
+	int instances = 1000;
+	const int MAX_INSTANCES = 10000;
+	glm::vec3* instanceOffsets = new glm::vec3[instances];
+	instanced = new InstancedMesh(cubeTransform, cubeMeshData, MAX_INSTANCES);
 
 	//Enable back face culling
 	glEnable(GL_CULL_FACE);
@@ -569,6 +558,11 @@ int main() {
 	glBindTexture(GL_TEXTURE_2D, brickNormal);
 	litShader.setInt("_Normal", 2);
 
+	for (int i = 0; i < instances; i++)
+	{
+		instanceOffsets[i] = glm::vec3(i, i, i);
+	}
+
 	while (!glfwWindowShouldClose(window)) {
 
 		processInput(window);
@@ -612,6 +606,8 @@ int main() {
 		litShader.setFloat("_MaxBias", maxBias);
 
 		glCullFace(GL_BACK);
+
+		instanced->updateData(instanceOffsets, instances);
 		drawSceneInstanced(litShader, camera.getViewMatrix(), camera.getProjectionMatrix());
 
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -648,6 +644,12 @@ int main() {
 		ImGui::Begin("Post Processing");
 
 		ImGui::Combo("Effects", &effectIndex, effectNames, IM_ARRAYSIZE(effectNames));
+		ImGui::End();
+
+		ImGui::Begin("Instancing");
+
+		//ImGui::InputInt("Instance Count", &instances);
+		ImGui::DragFloat3("Test", &instanceOffsets[0].x, 0.1, 0, 10);
 		ImGui::End();
 
 		ImGui::Render();

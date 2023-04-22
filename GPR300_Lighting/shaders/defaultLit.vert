@@ -33,5 +33,5 @@ void main(){
     TBN = mat3(t, b, n);
 
     lightSpacePos = _LightViewProj * _Model * vec4(vPos, 1);
-    gl_Position = _Projection * _View * _Model * vec4(vPos + gl_InstanceID,1);
+    gl_Position = _Projection * _View * _Model * vec4(vPos + vOffsetTemp,1);
 }
