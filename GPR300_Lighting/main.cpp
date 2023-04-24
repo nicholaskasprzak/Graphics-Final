@@ -345,6 +345,7 @@ public:
 	{
 		glBindVertexArray(mesh->getVAO());
 		glDrawElementsInstanced(GL_TRIANGLES, mesh->getNumIndicies(), GL_UNSIGNED_INT, 0, instanceCount);
+		glBindVertexArray(0);
 	}
 
 	void updateData(glm::vec3* dataVec, int instances)
@@ -493,8 +494,8 @@ int main() {
 	quadMesh = new ew::Mesh(&quadMeshData);
 	depthQuadMesh = new ew::Mesh(&depthQuadMeshData);
 
-	int instances = 1000;
-	const int MAX_INSTANCES = 10000;
+	int instances = 1000000;
+	const int MAX_INSTANCES = 1000000;
 	glm::vec3* instanceOffsets = new glm::vec3[instances];
 	instanced = new InstancedMesh(cubeTransform, cubeMeshData, MAX_INSTANCES);
 
@@ -558,9 +559,15 @@ int main() {
 	glBindTexture(GL_TEXTURE_2D, brickNormal);
 	litShader.setInt("_Normal", 2);
 
-	for (int i = 0; i < instances; i++)
+	int squaredInstances = sqrt(instances);
+	int cubed = cbrt(instances);
+
+	for (int i = 0; i < squaredInstances; i++)
 	{
-		instanceOffsets[i] = glm::vec3(i, i, i);
+		for (int j = 0; j < squaredInstances; j++)
+		{
+			instanceOffsets[i * squaredInstances + j] = glm::vec3(i * 1.5, 0, j * 1.5);
+		}
 	}
 
 	while (!glfwWindowShouldClose(window)) {
@@ -649,7 +656,7 @@ int main() {
 		ImGui::Begin("Instancing");
 
 		//ImGui::InputInt("Instance Count", &instances);
-		ImGui::DragFloat3("Test", &instanceOffsets[0].x, 0.1, 0, 10);
+		ImGui::DragFloat3("Test", &instanceOffsets[0].x, 0.1, -10, 10);
 		ImGui::End();
 
 		ImGui::Render();
