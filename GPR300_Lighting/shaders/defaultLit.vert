@@ -23,7 +23,7 @@ out vec4 lightSpacePos;
 
 void main(){    
 
-    vertexOutput.worldPosition = vec3(_Model * vec4(vPos, 1.0f));
+    vertexOutput.worldPosition = vec3(_Model * vec4(vPos + vOffsetTemp, 1.0f));
     vertexOutput.worldNormal = transpose(inverse(mat3(_Model))) * vNormal;
     vertexOutput.uv = vUV;
 

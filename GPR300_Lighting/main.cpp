@@ -316,6 +316,18 @@ private:
 class InstancedMesh
 {
 public:
+
+	/*
+	* Is having a giant block of memory dedicated to a set
+	* total instance count really a good idea? Would it be
+	* better to regenerate the buffer to correspond it to
+	* a specific total at any given time?
+	* 
+	* I mean, on one hand, it makes updating and adding new
+	* instances much faster, but theres a lot of memory that
+	* outright doesn't get used. So is it possible to have a
+	* fast and memory efficient solution?
+	*/
 	InstancedMesh(ew::Transform transform, ew::MeshData data, int totalCount)
 	{
 		meshTransform = transform;
@@ -353,6 +365,14 @@ public:
 		glBindBuffer(GL_ARRAY_BUFFER, instancedVBO);
 		glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(glm::vec3) * instances, dataVec);
 		instanceCount = instances;
+	}
+
+	void updateTargetData(glm::vec3* data, int instanceID)
+	{
+		if (instanceID > instanceCount) { return; }
+
+		glBindBuffer(GL_ARRAY_BUFFER, instancedVBO);
+		glBufferSubData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * instanceID, sizeof(glm::vec3), data);
 	}
 
 	glm::mat4 getModelMatrix() { return meshTransform.getModelMatrix(); }
@@ -496,8 +516,9 @@ int main() {
 
 	int instances = 1000000;
 	const int MAX_INSTANCES = 1000000;
-	glm::vec3* instanceOffsets = new glm::vec3[instances];
+	glm::vec3* instanceOffsets = new glm::vec3[MAX_INSTANCES];
 	instanced = new InstancedMesh(cubeTransform, cubeMeshData, MAX_INSTANCES);
+	int targetInstance = 0;
 
 	//Enable back face culling
 	glEnable(GL_CULL_FACE);
@@ -560,7 +581,6 @@ int main() {
 	litShader.setInt("_Normal", 2);
 
 	int squaredInstances = sqrt(instances);
-	int cubed = cbrt(instances);
 
 	for (int i = 0; i < squaredInstances; i++)
 	{
@@ -569,6 +589,8 @@ int main() {
 			instanceOffsets[i * squaredInstances + j] = glm::vec3(i * 1.5, 0, j * 1.5);
 		}
 	}
+
+	instanced->updateData(instanceOffsets, instances);
 
 	while (!glfwWindowShouldClose(window)) {
 
@@ -614,7 +636,6 @@ int main() {
 
 		glCullFace(GL_BACK);
 
-		instanced->updateData(instanceOffsets, instances);
 		drawSceneInstanced(litShader, camera.getViewMatrix(), camera.getProjectionMatrix());
 
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -653,10 +674,35 @@ int main() {
 		ImGui::Combo("Effects", &effectIndex, effectNames, IM_ARRAYSIZE(effectNames));
 		ImGui::End();
 
+		// This needs to be improved. ie. Have it so that data that corresponds
+		// with instances that don't exist don't get updated.
 		ImGui::Begin("Instancing");
 
-		//ImGui::InputInt("Instance Count", &instances);
-		ImGui::DragFloat3("Test", &instanceOffsets[0].x, 0.1, -10, 10);
+		ImGui::InputInt("Target Instance", &targetInstance);
+		ImGui::DragFloat3("Instance Position", &instanceOffsets[targetInstance].x, 0.1);
+		if (ImGui::Button("Update Position"))
+		{
+			if (targetInstance > instances - 1) { targetInstance = instances - 1; }
+
+			instanced->updateTargetData(&instanceOffsets[targetInstance], targetInstance);
+		}
+
+		ImGui::InputInt("Instance Count", &instances);
+		if (ImGui::Button("Generate Instances"))
+		{
+			if (instances > MAX_INSTANCES) { instances = MAX_INSTANCES; }
+			int squaredInstances = sqrt(instances);
+
+			for (int i = 0; i < squaredInstances; i++)
+			{
+				for (int j = 0; j < squaredInstances; j++)
+				{
+					instanceOffsets[i * squaredInstances + j] = glm::vec3(i * 1.5, 0, j * 1.5);
+				}
+			}
+			
+			instanced->updateData(instanceOffsets, instances);
+		}
 		ImGui::End();
 
 		ImGui::Render();
