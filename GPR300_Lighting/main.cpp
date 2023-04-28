@@ -451,6 +451,23 @@ void drawSceneInstanced(Shader& targetShader, glm::mat4 viewMatrix, glm::mat4 pr
 	instanced->draw();
 }
 
+void buildScene(glm::vec3 offsets[], int instances)
+{
+	int cubed = cbrt(instances);
+
+	for (int i = 0; i < cubed; i++)
+	{
+		for (int j = 0; j < cubed; j++)
+		{
+			for (int k = 0; k < cubed; k++)
+			{
+				offsets[(i * cubed * cubed) + (j * cubed) + k] = glm::vec3(i * 10, j * 10, k * 10);
+			}
+		}
+	}
+	instanced->updateData(offsets, instances);
+}
+
 int main() {
 	if (!glfwInit()) {
 		printf("glfw failed to init");
@@ -580,17 +597,7 @@ int main() {
 	glBindTexture(GL_TEXTURE_2D, brickNormal);
 	litShader.setInt("_Normal", 2);
 
-	int squaredInstances = sqrt(instances);
-
-	for (int i = 0; i < squaredInstances; i++)
-	{
-		for (int j = 0; j < squaredInstances; j++)
-		{
-			instanceOffsets[i * squaredInstances + j] = glm::vec3(i * 1.5, 0, j * 1.5);
-		}
-	}
-
-	instanced->updateData(instanceOffsets, instances);
+	buildScene(instanceOffsets, instances);
 
 	while (!glfwWindowShouldClose(window)) {
 
@@ -691,17 +698,7 @@ int main() {
 		if (ImGui::Button("Generate Instances"))
 		{
 			if (instances > MAX_INSTANCES) { instances = MAX_INSTANCES; }
-			int squaredInstances = sqrt(instances);
-
-			for (int i = 0; i < squaredInstances; i++)
-			{
-				for (int j = 0; j < squaredInstances; j++)
-				{
-					instanceOffsets[i * squaredInstances + j] = glm::vec3(i * 1.5, 0, j * 1.5);
-				}
-			}
-			
-			instanced->updateData(instanceOffsets, instances);
+			buildScene(instanceOffsets, instances);
 		}
 		ImGui::End();
 
