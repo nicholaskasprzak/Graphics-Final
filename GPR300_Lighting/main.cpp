@@ -108,30 +108,23 @@ PointLight _PointLight;
 SpotLight _SpotLight;
 Material _Material;
 
-// Not sure if this is the best spot to be putting this
 GLuint getTexture(const char* texturePath)
 {
-	// Generate a new texture and bind its location
 	GLuint texture;
 	glGenTextures(1, &texture);
 	glBindTexture(GL_TEXTURE_2D, texture);
 
-	// Have the loaded texture wrap on the s and t axes
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
-	// Generate mipmaps for minification of a texture and linearly filter between them
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-	// Linearly filter textures when magnifying
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-	// Load image data from path
 	int width, height, numComponents = 3;
 	unsigned char* data = stbi_load(texturePath, &width, &height, &numComponents, 0);
 
 	if (data != NULL)
 	{
-		// Generate a texture and mipmap from the given image data
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
 		glGenerateMipmap(GL_TEXTURE_2D);
 	}
@@ -142,20 +135,13 @@ GLuint getTexture(const char* texturePath)
 	}
 
 	stbi_image_free(data);
-	// Return the generated texture
+
 	return texture;
 }
 
-// Going fullscreen messes this up because it isn't being properly
-// resized to fit the new dimensions of the fullscreen viewport. (I think)
 class FrameBuffer
 {
 public:
-	/* 
-	* Init frame buffer
-	* Limitation of this implementation is that it messes with glSetActiveTexture
-	* by overwriting the active texture with the texture being created here.
-	*/
 	FrameBuffer(int colorBuffers, int width, int height)
 	{
 		mWidth = width;
@@ -163,20 +149,14 @@ public:
 		mTexturesLength = colorBuffers;
 		textures = new unsigned int[mTexturesLength];
 
-		// Create frame buffer object
 		glGenFramebuffers(1, &fbo);
 
-		// Bind frame buffer to GL_FRAMEBUFFER target
 		glBindFramebuffer(GL_FRAMEBUFFER, fbo);
 
-		// Create texture color buffers
 		glGenTextures(mTexturesLength, textures);
 
-		// Stores attachments to be passed into glDrawBuffers
-		// This implementation doesn't feel right
 		unsigned int* attachments = new unsigned int[mTexturesLength];
 
-		// Create textures for each generate color buffer
 		for (int i = 0; i < mTexturesLength; i++)
 		{
 			glBindTexture(GL_TEXTURE_2D, textures[i]);
@@ -185,31 +165,23 @@ public:
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 			glBindTexture(GL_TEXTURE_2D, 0);
 
-			// Attach the texture to the corresponding frame buffer slot
 			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, GL_TEXTURE_2D, textures[i], 0);
 
-			// Add the attachment to the attachment array
 			attachments[i] = GL_COLOR_ATTACHMENT0 + i;
 		}
 
-		// Create render buffer object
 		glGenRenderbuffers(1, &rbo);
 		glBindRenderbuffer(GL_RENDERBUFFER, rbo);
 
-		// Allocate space for the depth component
 		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT32F, width, height);
 		glBindRenderbuffer(GL_RENDERBUFFER, 0);
 
-		// Attach render buffer object to the frame buffer
 		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rbo);
 
-		// Specify how many attachments are being used in drawing
 		glDrawBuffers(mTexturesLength, attachments);
 
-		// Deallocate attachments array
 		delete[] attachments;
 
-		// Check for completeness
 		if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
 		{
 		}
@@ -218,12 +190,9 @@ public:
 		{
 		}
 
-		// Unbind framebuffer
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	}
 
-	// Delete the frame buffer and its components
-	// Not sure if memory with textures is cleaned up properly.
 	~FrameBuffer()
 	{
 		glDeleteRenderbuffers(1, &rbo);
@@ -234,10 +203,8 @@ public:
 		textures = nullptr;
 	}
 
-	// Getter for the current frame buffer
 	unsigned int getFBO() { return fbo; }
 
-	// Gett for the buffer's texture
 	unsigned int getTexture(int texNum) { return textures[texNum]; }
 
 private:
@@ -318,15 +285,16 @@ class InstancedMesh
 public:
 
 	/*
-	* Is having a giant block of memory dedicated to a set
-	* total instance count really a good idea? Would it be
-	* better to regenerate the buffer to correspond it to
-	* a specific total at any given time?
+	* Generates an array buffer that serves the purpose
+	* of storing vec3 offsets for each instance that should
+	* be drawn. The space allocated is equivalent to that
+	* of a set maximum amount of potential instances, but
+	* not the amount that will be drawn at any given time.
 	* 
-	* I mean, on one hand, it makes updating and adding new
-	* instances much faster, but theres a lot of memory that
-	* outright doesn't get used. So is it possible to have a
-	* fast and memory efficient solution?
+	* The buffer is then bound to the fourth vertex attribute
+	* of the given mesh's vertex array. glVertexAttribDivisor
+	* specifies that the fourth attribute should be updated
+	* for every instance that is drawn.
 	*/
 	InstancedMesh(ew::Transform transform, ew::MeshData data, int totalCount)
 	{
@@ -353,13 +321,23 @@ public:
 		delete mesh;
 	}
 
+	/*
+	* Performs an instanced draw call for
+	* the amount of instances that should
+	* be drawn.
+	*/
 	void draw()
 	{
 		glBindVertexArray(mesh->getVAO());
+
 		glDrawElementsInstanced(GL_TRIANGLES, mesh->getNumIndicies(), GL_UNSIGNED_INT, 0, instanceCount);
+
 		glBindVertexArray(0);
 	}
 
+	/*
+	* Updates the data stored in the offset buffer
+	*/
 	void updateData(glm::vec3* dataVec, int instances)
 	{
 		glBindBuffer(GL_ARRAY_BUFFER, instancedVBO);
@@ -367,6 +345,9 @@ public:
 		instanceCount = instances;
 	}
 
+	/*
+	* Updates data for a specific instance in the offset buffer
+	*/
 	void updateTargetData(glm::vec3* data, int instanceID)
 	{
 		if (instanceID > instanceCount) { return; }
@@ -421,27 +402,26 @@ void drawScene(Shader& targetShader, glm::mat4 viewMatrix, glm::mat4 projectionM
 	targetShader.setMat4("_View", viewMatrix);
 	targetShader.setMat4("_Projection", projectionMatrix);
 
-	//Draw cube
 	targetShader.setMat4("_Model", cubeTransform.getModelMatrix());
 	cubeMesh->draw();
 
-	//Draw rectangle
 	targetShader.setMat4("_Model", rectangleTransform.getModelMatrix());
 	rectangleMesh->draw();
 
-	//Draw sphere
 	targetShader.setMat4("_Model", sphereTransform.getModelMatrix());
 	sphereMesh->draw();
 
-	//Draw cylinder
 	targetShader.setMat4("_Model", cylinderTransform.getModelMatrix());
 	cylinderMesh->draw();
 
-	//Draw plane
 	targetShader.setMat4("_Model", planeTransform.getModelMatrix());
 	planeMesh->draw();
 }
 
+/*
+* Function that draws the scene using
+* the instanced object.
+*/
 void drawSceneInstanced(Shader& targetShader, glm::mat4 viewMatrix, glm::mat4 projectionMatrix)
 {
 	targetShader.setMat4("_View", viewMatrix);
@@ -451,6 +431,10 @@ void drawSceneInstanced(Shader& targetShader, glm::mat4 viewMatrix, glm::mat4 pr
 	instanced->draw();
 }
 
+/*
+* Updates a given array to assign positions
+* that create a cube in shape.
+*/
 void buildScene(glm::vec3 offsets[], int instances)
 {
 	int cubed = cbrt(instances);
@@ -488,31 +472,20 @@ int main() {
 	glfwSetCursorPosCallback(window, mousePosCallback);
 	glfwSetMouseButtonCallback(window, mouseButtonCallback);
 
-	//Hide cursor
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
-	// Setup UI Platform/Renderer backends
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init();
 
-	//Dark UI theme.
 	ImGui::StyleColorsDark();
 
-	//Used to draw shapes. This is the shader you will be completing.
 	Shader litShader("shaders/defaultLit.vert", "shaders/defaultLit.frag");
-
-	//Used to draw light sphere
 	Shader unlitShader("shaders/defaultLit.vert", "shaders/unlit.frag");
-
-	// Used to draw to the depth buffer only
 	Shader depthOnly("shaders/depthOnly.vert", "shaders/depthOnly.frag");
-
-	// Used to draw post processing effects
 	Shader postProc("shaders/postProcessing.vert", "shaders/postProcessing.frag");
 
-	// Create frame buffer instance with two frame buffers
 	FrameBuffer screenBuffer = FrameBuffer(1, SCREEN_WIDTH, SCREEN_HEIGHT);
 
 	ew::createCube(1.0f, 1.0f, 1.0f, cubeMeshData);
@@ -531,21 +504,23 @@ int main() {
 	quadMesh = new ew::Mesh(&quadMeshData);
 	depthQuadMesh = new ew::Mesh(&depthQuadMeshData);
 
+	/*
+	* Initialization of instanced rendering
+	*/
 	int instances = 1000000;
 	const int MAX_INSTANCES = 1000000;
 	glm::vec3* instanceOffsets = new glm::vec3[MAX_INSTANCES];
 	instanced = new InstancedMesh(cubeTransform, cubeMeshData, MAX_INSTANCES);
+
+	// Stores a target instance to be updated by the GUI
 	int targetInstance = 0;
 
-	//Enable back face culling
 	glEnable(GL_CULL_FACE);
 	glCullFace(GL_BACK);
 
-	//Enable blending
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	//Enable depth testing
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LESS);
 
@@ -612,14 +587,11 @@ int main() {
 		deltaTime = time - lastFrameTime;
 		lastFrameTime = time;
 
-		// Set active frame buffer to screenBuffer
 		glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 		glBindFramebuffer(GL_FRAMEBUFFER, screenBuffer.getFBO());
 
-		// Enable depth testing for 3D sorting
 		glEnable(GL_DEPTH_TEST);
 
-		// Clear screenBuffer (was here before)
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		litShader.use();
@@ -647,16 +619,12 @@ int main() {
 
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-		// Disable depth testing
 		glDisable(GL_DEPTH_TEST);
 
-		// Clear color buffer bit
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		// Set post processing shader
 		postProc.use();
 
-		// Bind screen buffer's texture to the shader's texture
 		glActiveTexture(GL_TEXTURE4);
 		glBindTexture(GL_TEXTURE_2D, screenBuffer.getTexture(0));
 		postProc.setInt("_Texture1", 4);
@@ -664,11 +632,9 @@ int main() {
 		postProc.setInt("effectIndex", effectIndex);
 		postProc.setFloat("time", time);
 
-		// Draw screen quad
 		postProc.setMat4("_Model", quadTransform.getModelMatrix());
 		quadMesh->draw();
 
-		//Draw UI
 		ImGui::Begin("Directional Light");
 
 		ImGui::DragFloat3("Direction", &_DirectionalLight.direction.x, 1, -360, 360);
